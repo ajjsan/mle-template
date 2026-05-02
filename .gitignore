@@ -132,6 +132,5 @@ dmypy.json
 # /data 
 data/train_split.csv
 data/val_split.csv
-experiments/tfidf_log_reg.pkl
 experiments/submission.csv
 .dvc/tmp/
