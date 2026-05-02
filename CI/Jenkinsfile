@@ -21,7 +21,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'DOCKER_NAMESPACE', defaultValue: 'YOUR_DOCKERHUB_USER', description: 'Docker Hub namespace/user')
+        string(name: 'DOCKER_NAMESPACE', defaultValue: 'ajjsan', description: 'Docker Hub namespace/user')
         string(name: 'IMAGE_NAME', defaultValue: 'mle-template-api', description: 'Имя репозитория образа на Docker Hub')
         string(name: 'DOCKER_REGISTRY', defaultValue: 'docker.io', description: 'Реестр (обычно docker.io)')
         booleanParam(name: 'TRIGGER_CD', defaultValue: false, description: 'После успешного push запустить CD job')
