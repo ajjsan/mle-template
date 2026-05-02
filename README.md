@@ -55,3 +55,24 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/predict-batch -Content
 ```powershell
 docker compose up --build
 ```
+
+## Docker image
+
+Собрать образ локально:
+
+```powershell
+docker build -t mle-template-api:latest .
+```
+
+Образ ставит зависимости из `requirements-api.txt` (минимальный набор для сервиса).
+
+Важно: в образ по умолчанию копируется обученная модель `experiments/tfidf_log_reg.pkl`.
+Сначала обучи модель (например, `python -m dvc repro` или `python .\\src\\train.py`), иначе `GET /health` покажет `model_loaded=false`.
+
+Проверка:
+
+```powershell
+docker run --rm -p 8000:8000 mle-template-api:latest
+```
+
+И открой `http://127.0.0.1:8000/docs`.

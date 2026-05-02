@@ -44,14 +44,20 @@ class Predictor:
     def predict(self) -> bool:
         args = self.parser.parse_args()
 
-        model_path = self.config.get(
-            "LOG_REG", "model_path", fallback=os.path.join("experiments", "tfidf_log_reg.pkl")
+        model_path = os.path.normpath(
+            self.config.get(
+                "LOG_REG", "model_path", fallback=os.path.join("experiments", "tfidf_log_reg.pkl")
+            )
         )
-        input_path = args.input or self.config.get(
-            "DATA", "test_csv", fallback=os.path.join("data", "test.csv")
+        input_path = os.path.normpath(
+            args.input
+            or self.config.get("DATA", "test_csv", fallback=os.path.join("data", "test.csv"))
         )
-        output_path = args.output or self.config.get(
-            "LOG_REG", "submission_path", fallback=os.path.join("experiments", "submission.csv")
+        output_path = os.path.normpath(
+            args.output
+            or self.config.get(
+                "LOG_REG", "submission_path", fallback=os.path.join("experiments", "submission.csv")
+            )
         )
 
         try:

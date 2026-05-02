@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.git/
+.gitignore
+.cursor/
+.idea/
+.vscode/
+*.log
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Локальные окружения
+.env
+.venv/
+venv/
+env/
+
+# Большие данные и артефакты (образ для API не должен тащить гигабайты по умолчанию)
+data/*.csv
+data/**/*.csv
+experiments/submission.csv
+experiments/metrics.json
+
+# DVC кеш/локальные tmp
+.dvc/tmp/

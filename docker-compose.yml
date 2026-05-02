@@ -3,7 +3,9 @@ version: "3.8"
 services:
   api:
     build: .
+    image: mle-template-api:latest
     container_name: twitter-sentiment-api
     ports:
       - "8000:8000"
-    command: uvicorn src.api:app --host 0.0.0.0 --port 8000
+    command: ["python", "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped

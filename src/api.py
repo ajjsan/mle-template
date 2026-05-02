@@ -12,7 +12,9 @@ CONFIG_PATH = os.path.join(os.getcwd(), "config.ini")
 def get_model_path() -> str:
     config = configparser.ConfigParser()
     config.read(CONFIG_PATH, encoding="utf-8")
-    return config.get("LOG_REG", "model_path", fallback=os.path.join("experiments", "tfidf_log_reg.pkl"))
+    return os.path.normpath(
+        config.get("LOG_REG", "model_path", fallback=os.path.join("experiments", "tfidf_log_reg.pkl"))
+    )
 
 
 class PredictRequest(BaseModel):

@@ -45,13 +45,21 @@ class DataMaker:
         self.config = configparser.ConfigParser()
         self.config.read(self.config_path, encoding="utf-8")
 
-        self.train_path = self.config.get("DATA", "train_csv", fallback=self.train_path)
-        self.test_path = self.config.get("DATA", "test_csv", fallback=self.test_path)
-        self.train_split_path = self.config.get(
-            "SPLIT_DATA", "train_split_csv", fallback=self.train_split_path
+        self.train_path = os.path.normpath(
+            self.config.get("DATA", "train_csv", fallback=self.train_path)
         )
-        self.val_split_path = self.config.get(
-            "SPLIT_DATA", "val_split_csv", fallback=self.val_split_path
+        self.test_path = os.path.normpath(
+            self.config.get("DATA", "test_csv", fallback=self.test_path)
+        )
+        self.train_split_path = os.path.normpath(
+            self.config.get(
+                "SPLIT_DATA", "train_split_csv", fallback=self.train_split_path
+            )
+        )
+        self.val_split_path = os.path.normpath(
+            self.config.get(
+                "SPLIT_DATA", "val_split_csv", fallback=self.val_split_path
+            )
         )
         self.log.info("DataMaker is ready")
 

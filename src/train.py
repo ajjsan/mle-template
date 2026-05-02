@@ -30,22 +30,30 @@ class MultiModel:
 
         self.project_path = os.path.join(os.getcwd(), "experiments")
         os.makedirs(self.project_path, exist_ok=True)
-        self.log_reg_path = self.config.get(
-            "LOG_REG",
-            "model_path",
-            fallback=os.path.join(self.project_path, "tfidf_log_reg.pkl"),
+        self.log_reg_path = os.path.normpath(
+            self.config.get(
+                "LOG_REG",
+                "model_path",
+                fallback=os.path.join(self.project_path, "tfidf_log_reg.pkl"),
+            )
         )
-        self.metrics_path = self.config.get(
-            "LOG_REG",
-            "metrics_path",
-            fallback=os.path.join(self.project_path, "metrics.json"),
+        self.metrics_path = os.path.normpath(
+            self.config.get(
+                "LOG_REG",
+                "metrics_path",
+                fallback=os.path.join(self.project_path, "metrics.json"),
+            )
         )
 
-        train_split = self.config.get(
-            "SPLIT_DATA", "train_split_csv", fallback=os.path.join("data", "train_split.csv")
+        train_split = os.path.normpath(
+            self.config.get(
+                "SPLIT_DATA", "train_split_csv", fallback=os.path.join("data", "train_split.csv")
+            )
         )
-        val_split = self.config.get(
-            "SPLIT_DATA", "val_split_csv", fallback=os.path.join("data", "val_split.csv")
+        val_split = os.path.normpath(
+            self.config.get(
+                "SPLIT_DATA", "val_split_csv", fallback=os.path.join("data", "val_split.csv")
+            )
         )
         self.train_df = pd.read_csv(train_split)
         self.val_df = pd.read_csv(val_split)
