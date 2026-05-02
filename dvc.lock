@@ -3,23 +3,19 @@ stages:
   preprocess:
     cmd: python .\src\preprocess.py
     deps:
+    - path: config.ini
+      hash: md5
+      md5: 7f30d0f5d6b068b444f045e6639ca254
+      size: 472
     - path: data/train.csv
       hash: md5
       md5: 7b48b0cc7e5d55d1bf49eb8d4582830c
       size: 8664015
-    - path: params.yaml
-      hash: md5
-      md5: ffa4d836228fa6cb18bde6fba6a2c74f
-      size: 190
     - path: src/preprocess.py
       hash: md5
-      md5: bf57551c928cc17696edaf58631f10a6
-      size: 4255
+      md5: 65c080fb7da8673715123a13321fd0ad
+      size: 3808
     outs:
-    - path: config.ini
-      hash: md5
-      md5: af914597d3dcb5fda21348d0a87a3d54
-      size: 156
     - path: data/train_split.csv
       hash: md5
       md5: 5a90e0657efbfea6641d2644f003b5f6
@@ -31,6 +27,10 @@ stages:
   train:
     cmd: python .\src\train.py
     deps:
+    - path: config.ini
+      hash: md5
+      md5: 7f30d0f5d6b068b444f045e6639ca254
+      size: 472
     - path: data/train_split.csv
       hash: md5
       md5: 5a90e0657efbfea6641d2644f003b5f6
@@ -39,18 +39,14 @@ stages:
       hash: md5
       md5: fc0889c93403e27faecb9fe3489b599c
       size: 1722007
-    - path: params.yaml
-      hash: md5
-      md5: ffa4d836228fa6cb18bde6fba6a2c74f
-      size: 190
     - path: src/logger.py
       hash: md5
       md5: 0f751e21bf5faddd773174d5c7f037e5
       size: 1985
     - path: src/train.py
       hash: md5
-      md5: c1cfafd06a5474b68805e0f43131cd02
-      size: 3710
+      md5: c5aba23999a965f384a31ec5041c2b4a
+      size: 3985
     outs:
     - path: experiments/metrics.json
       hash: md5
@@ -63,6 +59,10 @@ stages:
   predict:
     cmd: python .\src\predict.py --output .\experiments\submission.csv
     deps:
+    - path: config.ini
+      hash: md5
+      md5: 7f30d0f5d6b068b444f045e6639ca254
+      size: 472
     - path: data/test.csv
       hash: md5
       md5: 2a2e677fb5d4e7ab5a021959eac7d123
@@ -77,8 +77,8 @@ stages:
       size: 1985
     - path: src/predict.py
       hash: md5
-      md5: 610e1eeb9048d37ecf7249add96c4087
-      size: 2456
+      md5: 435a0296f72559ec867d43ae9482de19
+      size: 2795
     outs:
     - path: experiments/submission.csv
       hash: md5
