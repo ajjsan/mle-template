@@ -81,7 +81,7 @@ docker run --rm -p 8000:8000 mle-template-api:latest
 
 В репозитории лежат пайплайны:
 
-- `CI/Jenkinsfile` — сборка образа и push в Docker Hub для PR в `main`
+- `CI/Jenkinsfile` — сборка образа и push в Docker Hub (PR и/или обычные сборки веток — см. параметры `ONLY_*`)
 - `CD/Jenkinsfile` — pull образа, запуск контейнера и функциональные проверки (`scripts/functional_test_api.py`)
 
 Оба пайплайна рассчитаны на Jenkins agent **Linux или Windows**: на Windows используются шаги `bat`, на Linux — `sh`.
@@ -90,14 +90,24 @@ docker run --rm -p 8000:8000 mle-template-api:latest
 
 Создайте credential типа **Username with password** для Docker Hub и укажите ID **`dockerhub`** (или поменяйте `credentials('dockerhub')` в Jenkinsfile).
 
-### CI (PR → main)
+### CI
 
-Рекомендуется **Multibranch Pipeline** + webhook на события PR. Stage `Docker login + push` включится только когда:
+Поддерживаются оба варианта job:
 
-- сборка — это PR (`changeRequest()`)
-- target branch PR — `main` (`CHANGE_TARGET == main`)
+- **Multibranch Pipeline** (удобно для PR)
+- обычный **Pipeline** на конкретную ветку / ручной запуск
+
+Stage `Docker login + push` управляется параметрами:
+
+- `PUSH_IMAGE` — включить/выключить push
+- `ONLY_PR_TO_MAIN=true` — только PR, который нацелен в `main`
+- `ONLY_MAIN_BRANCH=true` — только не-PR сборки ветки `main` (часто для обычного Pipeline job)
+
+По умолчанию оба ограничителя выключены: push будет выполняться для большинства сборок (кроме случаев, когда push отключён параметром или не прошёл gate).
 
 Параметры job позволяют задать `DOCKER_NAMESPACE` и `IMAGE_NAME`.
+
+Тег образа записывается в `ci_tags.env` как `TAG_CI=...` и используется CD при `TRIGGER_CD`.
 
 Важно: stage `Verify model artifact` требует файл `experiments/tfidf_log_reg.pkl` в workspace до `docker build`.
 Если модель не хранится в git, добавьте отдельный шаг загрузки артефакта (S3/Nexus/архив) перед сборкой.
