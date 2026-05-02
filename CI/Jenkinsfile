@@ -28,8 +28,8 @@ pipeline {
         booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Делать docker login + push образа')
         booleanParam(name: 'ONLY_MAIN_BRANCH', defaultValue: false, description: 'Если true — push только для сборок ветки main (НЕ PR), полезно для обычного Pipeline job')
         booleanParam(name: 'ONLY_PR_TO_MAIN', defaultValue: false, description: 'Если true — push только для PR, у которых target branch = main')
-        booleanParam(name: 'TRIGGER_CD', defaultValue: false, description: 'После успешного push запустить CD job')
-        string(name: 'CD_JOB', defaultValue: '', description: 'Имя CD job в Jenkins (например folder/cd-mle-api). Пусто = не запускать')
+        booleanParam(name: 'TRIGGER_CD', defaultValue: true, description: 'После успешного push запустить CD job')
+        string(name: 'CD_JOB', defaultValue: 'CD job', description: 'Имя CD job в Jenkins (например folder/cd-mle-api). Пусто = не запускать')
         string(name: 'CD_DEPLOY_TAG', defaultValue: '', description: 'Тег образа для CD (пусто = использовать тег из CI)')
     }
 
