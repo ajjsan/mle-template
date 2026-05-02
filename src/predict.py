@@ -1,5 +1,4 @@
 import argparse
-import configparser
 import os
 import pickle
 import sys
@@ -15,9 +14,7 @@ SHOW_LOG = True
 class Predictor:
     def __init__(self) -> None:
         logger = Logger(SHOW_LOG)
-        self.config = configparser.ConfigParser()
         self.log = logger.get_logger(__name__)
-        self.config.read("config.ini")
 
         self.parser = argparse.ArgumentParser(description="Kaggle submission generator")
         self.parser.add_argument(
@@ -25,7 +22,7 @@ class Predictor:
             type=str,
             default="LOG_REG",
             choices=["LOG_REG"],
-            help="Какая модель из config.ini",
+            help="Имя модели",
         )
         self.parser.add_argument(
             "--input",
@@ -44,13 +41,8 @@ class Predictor:
     def predict(self) -> bool:
         args = self.parser.parse_args()
 
-        try:
-            model_path = self.config[args.model]["path"]
-        except Exception:
-            self.log.error("Не найден путь к модели в config.ini. Сначала запусти src/train.py.")
-            return False
-
-        input_path = args.input or self.config.get("DATA", "test_csv", fallback=os.path.join("data", "test.csv"))
+        model_path = os.path.join("experiments", "tfidf_log_reg.pkl")
+        input_path = args.input or os.path.join("data", "test.csv")
 
         try:
             model = pickle.load(open(model_path, "rb"))

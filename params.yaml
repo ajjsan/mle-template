@@ -1,0 +1,14 @@
+split:
+  test_size: 0.2
+  random_state: 42
+
+tfidf:
+  ngram_range: [1, 2]
+  max_features: 200000
+  min_df: 1
+  max_df: 1.0
+
+model:
+  C: 1.0
+  max_iter: 2000
+  solver: liblinear

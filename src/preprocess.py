@@ -5,6 +5,7 @@ import sys
 import traceback
 
 import pandas as pd
+import yaml
 from sklearn.model_selection import train_test_split
 
 from logger import Logger
@@ -12,6 +13,7 @@ from logger import Logger
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 SHOW_LOG = True
+PARAMS_PATH = os.path.join(os.getcwd(), "params.yaml")
 
 
 def _clean_text(text: str) -> str:
@@ -45,6 +47,12 @@ class DataMaker:
         self.config = configparser.ConfigParser()
         self.log.info("DataMaker is ready")
 
+    def read_params(self) -> dict:
+        if not os.path.isfile(PARAMS_PATH):
+            return {}
+        with open(PARAMS_PATH, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
     def get_data(self) -> bool:
         ok = os.path.isfile(self.train_path) and os.path.isfile(self.test_path)
         if not ok:
@@ -54,6 +62,11 @@ class DataMaker:
         return ok
 
     def split_data(self, test_size: float = TEST_SIZE, random_state: int = RANDOM_STATE) -> bool:
+        params = self.read_params()
+        split_params = params.get("split", {})
+        test_size = split_params.get("test_size", test_size)
+        random_state = split_params.get("random_state", random_state)
+
         if not self.get_data():
             return False
         try:
