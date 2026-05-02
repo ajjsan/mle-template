@@ -1,0 +1,86 @@
+schema: '2.0'
+stages:
+  preprocess:
+    cmd: python .\src\preprocess.py
+    deps:
+    - path: data/train.csv
+      hash: md5
+      md5: 7b48b0cc7e5d55d1bf49eb8d4582830c
+      size: 8664015
+    - path: params.yaml
+      hash: md5
+      md5: ffa4d836228fa6cb18bde6fba6a2c74f
+      size: 190
+    - path: src/preprocess.py
+      hash: md5
+      md5: bf57551c928cc17696edaf58631f10a6
+      size: 4255
+    outs:
+    - path: config.ini
+      hash: md5
+      md5: af914597d3dcb5fda21348d0a87a3d54
+      size: 156
+    - path: data/train_split.csv
+      hash: md5
+      md5: 5a90e0657efbfea6641d2644f003b5f6
+      size: 6879785
+    - path: data/val_split.csv
+      hash: md5
+      md5: fc0889c93403e27faecb9fe3489b599c
+      size: 1722007
+  train:
+    cmd: python .\src\train.py
+    deps:
+    - path: data/train_split.csv
+      hash: md5
+      md5: 5a90e0657efbfea6641d2644f003b5f6
+      size: 6879785
+    - path: data/val_split.csv
+      hash: md5
+      md5: fc0889c93403e27faecb9fe3489b599c
+      size: 1722007
+    - path: params.yaml
+      hash: md5
+      md5: ffa4d836228fa6cb18bde6fba6a2c74f
+      size: 190
+    - path: src/logger.py
+      hash: md5
+      md5: 0f751e21bf5faddd773174d5c7f037e5
+      size: 1985
+    - path: src/train.py
+      hash: md5
+      md5: c1cfafd06a5474b68805e0f43131cd02
+      size: 3710
+    outs:
+    - path: experiments/metrics.json
+      hash: md5
+      md5: a1f9f86b78282ec26b14acec7052bee6
+      size: 42
+    - path: experiments/tfidf_log_reg.pkl
+      hash: md5
+      md5: 5399d530c9759cc63b68ab5a3646e2d1
+      size: 9724564
+  predict:
+    cmd: python .\src\predict.py --output .\experiments\submission.csv
+    deps:
+    - path: data/test.csv
+      hash: md5
+      md5: 2a2e677fb5d4e7ab5a021959eac7d123
+      size: 26127064
+    - path: experiments/tfidf_log_reg.pkl
+      hash: md5
+      md5: 5399d530c9759cc63b68ab5a3646e2d1
+      size: 9724564
+    - path: src/logger.py
+      hash: md5
+      md5: 0f751e21bf5faddd773174d5c7f037e5
+      size: 1985
+    - path: src/predict.py
+      hash: md5
+      md5: 610e1eeb9048d37ecf7249add96c4087
+      size: 2456
+    outs:
+    - path: experiments/submission.csv
+      hash: md5
+      md5: c91078b5eae82da3041b519be94428e3
+      size: 2888825
