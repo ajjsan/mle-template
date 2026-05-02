@@ -1,4 +1,5 @@
 import argparse
+import configparser
 import os
 import pickle
 import sys
@@ -15,6 +16,8 @@ class Predictor:
     def __init__(self) -> None:
         logger = Logger(SHOW_LOG)
         self.log = logger.get_logger(__name__)
+        self.config = configparser.ConfigParser()
+        self.config.read(os.path.join(os.getcwd(), "config.ini"), encoding="utf-8")
 
         self.parser = argparse.ArgumentParser(description="Kaggle submission generator")
         self.parser.add_argument(
@@ -33,7 +36,7 @@ class Predictor:
         self.parser.add_argument(
             "--output",
             type=str,
-            default=os.path.join("experiments", "submission.csv"),
+            default=None,
             help="Куда сохранить submission.csv",
         )
         self.log.info("Predictor is ready")
@@ -41,8 +44,15 @@ class Predictor:
     def predict(self) -> bool:
         args = self.parser.parse_args()
 
-        model_path = os.path.join("experiments", "tfidf_log_reg.pkl")
-        input_path = args.input or os.path.join("data", "test.csv")
+        model_path = self.config.get(
+            "LOG_REG", "model_path", fallback=os.path.join("experiments", "tfidf_log_reg.pkl")
+        )
+        input_path = args.input or self.config.get(
+            "DATA", "test_csv", fallback=os.path.join("data", "test.csv")
+        )
+        output_path = args.output or self.config.get(
+            "LOG_REG", "submission_path", fallback=os.path.join("experiments", "submission.csv")
+        )
 
         try:
             model = pickle.load(open(model_path, "rb"))
@@ -66,10 +76,10 @@ class Predictor:
         preds = model.predict(df_test["SentimentText"].astype(str).fillna(""))
         sub = pd.DataFrame({"ItemID": df_test["ItemID"], "Sentiment": preds.astype(int)})
 
-        os.makedirs(os.path.dirname(args.output), exist_ok=True)
-        sub.to_csv(args.output, index=False)
-        self.log.info(f"Saved submission to {args.output}")
-        return os.path.isfile(args.output)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        sub.to_csv(output_path, index=False)
+        self.log.info(f"Saved submission to {output_path}")
+        return os.path.isfile(output_path)
 
 
 if __name__ == "__main__":

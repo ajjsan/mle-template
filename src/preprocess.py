@@ -5,7 +5,6 @@ import sys
 import traceback
 
 import pandas as pd
-import yaml
 from sklearn.model_selection import train_test_split
 
 from logger import Logger
@@ -13,7 +12,6 @@ from logger import Logger
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 SHOW_LOG = True
-PARAMS_PATH = os.path.join(os.getcwd(), "params.yaml")
 
 
 def _clean_text(text: str) -> str:
@@ -45,13 +43,17 @@ class DataMaker:
 
         self.config_path = os.path.join(os.getcwd(), "config.ini")
         self.config = configparser.ConfigParser()
-        self.log.info("DataMaker is ready")
+        self.config.read(self.config_path, encoding="utf-8")
 
-    def read_params(self) -> dict:
-        if not os.path.isfile(PARAMS_PATH):
-            return {}
-        with open(PARAMS_PATH, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+        self.train_path = self.config.get("DATA", "train_csv", fallback=self.train_path)
+        self.test_path = self.config.get("DATA", "test_csv", fallback=self.test_path)
+        self.train_split_path = self.config.get(
+            "SPLIT_DATA", "train_split_csv", fallback=self.train_split_path
+        )
+        self.val_split_path = self.config.get(
+            "SPLIT_DATA", "val_split_csv", fallback=self.val_split_path
+        )
+        self.log.info("DataMaker is ready")
 
     def get_data(self) -> bool:
         ok = os.path.isfile(self.train_path) and os.path.isfile(self.test_path)
@@ -62,10 +64,8 @@ class DataMaker:
         return ok
 
     def split_data(self, test_size: float = TEST_SIZE, random_state: int = RANDOM_STATE) -> bool:
-        params = self.read_params()
-        split_params = params.get("split", {})
-        test_size = split_params.get("test_size", test_size)
-        random_state = split_params.get("random_state", random_state)
+        test_size = self.config.getfloat("SPLIT_DATA", "test_size", fallback=test_size)
+        random_state = self.config.getint("SPLIT_DATA", "random_state", fallback=random_state)
 
         if not self.get_data():
             return False
@@ -98,16 +98,6 @@ class DataMaker:
 
         train_df.to_csv(self.train_split_path, index=False)
         val_df.to_csv(self.val_split_path, index=False)
-
-        # Пишем относительные пути, чтобы проект был переносимым
-        rel = lambda p: os.path.relpath(p, os.getcwd())
-        self.config["DATA"] = {"train_csv": rel(self.train_path), "test_csv": rel(self.test_path)}
-        self.config["SPLIT_DATA"] = {
-            "train_split_csv": rel(self.train_split_path),
-            "val_split_csv": rel(self.val_split_path),
-        }
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            self.config.write(f)
 
         self.log.info("Train/val split is ready")
         return os.path.isfile(self.train_split_path) and os.path.isfile(self.val_split_path)

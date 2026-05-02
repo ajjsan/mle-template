@@ -2,22 +2,21 @@ stages:
   preprocess:
     cmd: python .\src\preprocess.py
     deps:
+      - config.ini
       - src/preprocess.py
       - data/train.csv
-      - params.yaml
     outs:
-      - config.ini
       - data/train_split.csv
       - data/val_split.csv
 
   train:
     cmd: python .\src\train.py
     deps:
+      - config.ini
       - src/train.py
       - src/logger.py
       - data/train_split.csv
       - data/val_split.csv
-      - params.yaml
     outs:
       - experiments/tfidf_log_reg.pkl
     metrics:
@@ -27,6 +26,7 @@ stages:
   predict:
     cmd: python .\src\predict.py --output .\experiments\submission.csv
     deps:
+      - config.ini
       - src/predict.py
       - src/logger.py
       - data/test.csv

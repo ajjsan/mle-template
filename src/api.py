@@ -1,3 +1,4 @@
+import configparser
 import os
 import pickle
 from functools import lru_cache
@@ -5,7 +6,13 @@ from functools import lru_cache
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-MODEL_PATH = os.path.join("experiments", "tfidf_log_reg.pkl")
+CONFIG_PATH = os.path.join(os.getcwd(), "config.ini")
+
+
+def get_model_path() -> str:
+    config = configparser.ConfigParser()
+    config.read(CONFIG_PATH, encoding="utf-8")
+    return config.get("LOG_REG", "model_path", fallback=os.path.join("experiments", "tfidf_log_reg.pkl"))
 
 
 class PredictRequest(BaseModel):
@@ -40,12 +47,13 @@ app = FastAPI(
 
 @lru_cache(maxsize=1)
 def load_model():
-    if not os.path.isfile(MODEL_PATH):
+    model_path = get_model_path()
+    if not os.path.isfile(model_path):
         raise FileNotFoundError(
-            f"Модель не найдена по пути '{MODEL_PATH}'. Сначала запусти обучение: python .\\src\\train.py"
+            f"Модель не найдена по пути '{model_path}'. Сначала запусти обучение: python .\\src\\train.py"
         )
 
-    with open(MODEL_PATH, "rb") as f:
+    with open(model_path, "rb") as f:
         return pickle.load(f)
 
 
@@ -68,7 +76,7 @@ def health_check():
 
     return HealthResponse(
         status="ok",
-        model_path=MODEL_PATH,
+        model_path=get_model_path(),
         model_loaded=model_loaded,
     )
 

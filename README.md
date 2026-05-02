@@ -17,7 +17,7 @@ python -m dvc status
 python -m dvc metrics show
 ```
 
-Гиперпараметры и split лежат в `params.yaml`.
+Пути, split и гиперпараметры модели лежат в `config.ini`.
 
 ## FastAPI
 

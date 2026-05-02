@@ -1,3 +1,4 @@
+import configparser
 import json
 import os
 import pickle
@@ -5,7 +6,6 @@ import sys
 import traceback
 
 import pandas as pd
-import yaml
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
@@ -14,7 +14,6 @@ from sklearn.pipeline import Pipeline
 from logger import Logger
 
 SHOW_LOG = True
-PARAMS_PATH = os.path.join(os.getcwd(), "params.yaml")
 
 
 class MultiModel:
@@ -26,47 +25,54 @@ class MultiModel:
     def __init__(self) -> None:
         logger = Logger(SHOW_LOG)
         self.log = logger.get_logger(__name__)
+        self.config = configparser.ConfigParser()
+        self.config.read(os.path.join(os.getcwd(), "config.ini"), encoding="utf-8")
 
         self.project_path = os.path.join(os.getcwd(), "experiments")
         os.makedirs(self.project_path, exist_ok=True)
-        self.log_reg_path = os.path.join(self.project_path, "tfidf_log_reg.pkl")
-        self.metrics_path = os.path.join(self.project_path, "metrics.json")
+        self.log_reg_path = self.config.get(
+            "LOG_REG",
+            "model_path",
+            fallback=os.path.join(self.project_path, "tfidf_log_reg.pkl"),
+        )
+        self.metrics_path = self.config.get(
+            "LOG_REG",
+            "metrics_path",
+            fallback=os.path.join(self.project_path, "metrics.json"),
+        )
 
-        train_split = os.path.join("data", "train_split.csv")
-        val_split = os.path.join("data", "val_split.csv")
+        train_split = self.config.get(
+            "SPLIT_DATA", "train_split_csv", fallback=os.path.join("data", "train_split.csv")
+        )
+        val_split = self.config.get(
+            "SPLIT_DATA", "val_split_csv", fallback=os.path.join("data", "val_split.csv")
+        )
         self.train_df = pd.read_csv(train_split)
         self.val_df = pd.read_csv(val_split)
         self.log.info("Trainer is ready")
 
-    def read_params(self) -> dict:
-        if not os.path.isfile(PARAMS_PATH):
-            return {}
-        with open(PARAMS_PATH, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-
     def log_reg(self, predict: bool = True) -> bool:
-        params = self.read_params()
-        tfidf_params = params.get("tfidf", {})
-        model_params = params.get("model", {})
-
         pipe = Pipeline(
             steps=[
                 (
                     "tfidf",
                     TfidfVectorizer(
                         lowercase=True,
-                        ngram_range=tuple(tfidf_params.get("ngram_range", [1, 2])),
-                        max_features=tfidf_params.get("max_features", 200_000),
-                        min_df=tfidf_params.get("min_df", 1),
-                        max_df=tfidf_params.get("max_df", 1.0),
+                        ngram_range=(
+                            self.config.getint("TFIDF", "ngram_min", fallback=1),
+                            self.config.getint("TFIDF", "ngram_max", fallback=2),
+                        ),
+                        max_features=self.config.getint("TFIDF", "max_features", fallback=200_000),
+                        min_df=self.config.getint("TFIDF", "min_df", fallback=1),
+                        max_df=self.config.getfloat("TFIDF", "max_df", fallback=1.0),
                     ),
                 ),
                 (
                     "clf",
                     LogisticRegression(
-                        max_iter=model_params.get("max_iter", 2000),
-                        C=model_params.get("C", 1.0),
-                        solver=model_params.get("solver", "liblinear"),
+                        max_iter=self.config.getint("LOG_REG", "max_iter", fallback=2000),
+                        C=self.config.getfloat("LOG_REG", "c", fallback=1.0),
+                        solver=self.config.get("LOG_REG", "solver", fallback="liblinear"),
                     ),
                 ),
             ]
