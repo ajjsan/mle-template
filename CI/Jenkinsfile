@@ -1,102 +1,156 @@
+/* Jenkins CI: сборка Docker-образа и push в Docker Hub.
+ *
+ * Рекомендуемая настройка job:
+ * - Multibranch Pipeline (GitHub/GitLab), default branch: main
+ * - Webhook на PR events (opened/synchronize/reopened)
+ *
+ * Credentials:
+ * - dockerhub (Username with password), credentialsId: dockerhub
+ *
+ * Важно: для корректного /health внутри образа нужен файл модели:
+ *   experiments/tfidf_log_reg.pkl
+ * Если модель не в git — добавьте шаг загрузки артефакта до docker build,
+ * либо используйте CD с bind-mount модели (см. CD/Jenkinsfile).
+ */
+
 pipeline {
     agent any
 
-    environment {
-        DOCKERHUB_CREDS=credentials('mle-template')
-        LC_ALL = "en_US.UTF-8"
-        LANG    = "en_US.UTF-8"
-        LANGUAGE = "en_US.UTF-8"
+    options {
+        timestamps()
+        disableConcurrentBuilds(abortPrevious: true)
     }
 
-options {
-        timestamps()
-        skipDefaultCheckout(true)
-	}
+    parameters {
+        string(name: 'DOCKER_NAMESPACE', defaultValue: 'YOUR_DOCKERHUB_USER', description: 'Docker Hub namespace/user')
+        string(name: 'IMAGE_NAME', defaultValue: 'mle-template-api', description: 'Имя репозитория образа на Docker Hub')
+        string(name: 'DOCKER_REGISTRY', defaultValue: 'docker.io', description: 'Реестр (обычно docker.io)')
+        booleanParam(name: 'TRIGGER_CD', defaultValue: false, description: 'После успешного push запустить CD job')
+        string(name: 'CD_JOB', defaultValue: '', description: 'Имя CD job в Jenkins (например folder/cd-mle-api). Пусто = не запускать')
+        string(name: 'CD_DEPLOY_TAG', defaultValue: '', description: 'Тег образа для CD (пусто = использовать тег из CI)')
+    }
+
+    environment {
+        DOCKERHUB = credentials('dockerhub')
+    }
+
     stages {
-        stage('Clone github repository') {
-            steps {
-                cleanWs()
-                bat 'chcp 65001 && git clone -b main https://github.com/IcyAltair/mle-template.git'
-				}
-			}
-
-        stage('Checkout repo dir') {
-            steps {
-                bat 'chcp 65001 && cd mle-template && dir'
-				}
-			}
-
-        stage('Login'){
-            steps{
-                //withCredentials([usernamePassword(credentialsId: 'mle-template', passwordVariable: 'DOCKER_REGISTRY_PWD', usernameVariable: 'DOCKER_REGISTRY_USER')]){
-                //bat 'chcp 65001 && echo %DOCKER_REGISTRY_PWD% | docker login -u %DOCKER_REGISTRY_USER% --password-stdin'}
-                //bat 'chcp 65001 && echo %DOCKERHUB_CREDS_PSW% | docker login -u %DOCKERHUB_CREDS_USR% --password-stdin'
-                bat 'chcp 65001 && docker login -u %DOCKERHUB_CREDS_USR% -p %DOCKERHUB_CREDS_PSW%'
-                }
-            }
-
-        stage('Create and run docker container') {
+        stage('Preflight') {
             steps {
                 script {
-                    try {
-                        bat 'chcp 65001 && cd mle-template && docker-compose build'
-                        }
-
-                    finally {
-                    bat '''
-                        chcp 65001
-                        cd mle-template
-                        docker-compose up -d
-                        '''
-                        }
-				    }
+                    if (!env.CHANGE_ID) {
+                        echo 'INFO: CHANGE_ID пустой — это не PR-сборка Multibranch. Для автоматизации по PR используйте Multibranch Pipeline + webhook.'
+                    }
                 }
             }
+        }
 
-        // use for multi containers:
-        //docker exec %containerId% cd app && coverage run src/unit_tests/test_preprocess.py && coverage run -a src/unit_tests/test_training.py && coverage report -m
-        //use for single container (with auth):
-        //docker run --name mle-template_web_1 cd app && coverage run src/unit_tests/test_preprocess.py && coverage run -a src/unit_tests/test_training.py && coverage report -m
-
-        stage('Checkout container logs') {
+        stage('Checkout') {
             steps {
-                dir("mle-template") {
-                        bat '''
-                            docker-compose up -d
-                            for /f %%i in ('docker ps -qf "name=^mle-template-web-1"') do set containerId=%%i
-                            echo %containerId%
-                            IF "%containerId%" == "" (
-                                echo "No container running"
-                            )
-                            ELSE (
-                                docker logs --tail 1000 -f %containerId%
-                                )
+                checkout scm
+            }
+        }
+
+        stage('Verify model artifact (recommended)') {
+            steps {
+                sh '''
+                    test -f experiments/tfidf_log_reg.pkl || (echo "ERROR: experiments/tfidf_log_reg.pkl not found in workspace. Add artifact fetch/train step before docker build." && exit 1)
+                '''
+            }
+        }
+
+        stage('Docker build') {
+            steps {
+                script {
+                    withEnv([
+                        "IMAGE_NAME=${params.IMAGE_NAME}",
+                    ]) {
+                        sh '''
+                            set -eux
+                            SHORT_SHA="$(git rev-parse --short HEAD)"
+                            docker build -t "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" .
                         '''
                     }
-            }
-        }
-
-        stage('Checkout coverage report'){
-            steps{
-                dir("mle-template"){
-                    bat '''
-                    docker-compose logs -t --tail 10
-                    '''
                 }
             }
         }
 
-        stage('Push'){
-            steps{
-                bat 'chcp 65001 && docker push altairzero/mle-template:latest'
+        stage('Docker login + push (PR -> main)') {
+            when {
+                allOf {
+                    changeRequest()
+                    equals expected: 'main', actual: "${env.CHANGE_TARGET}"
+                }
+            }
+            steps {
+                script {
+                    withEnv([
+                        "DOCKER_REGISTRY=${params.DOCKER_REGISTRY}",
+                        "DOCKER_NAMESPACE=${params.DOCKER_NAMESPACE}",
+                        "IMAGE_NAME=${params.IMAGE_NAME}",
+                    ]) {
+                        sh '''
+                            set -eux
+                            SHORT_SHA="$(git rev-parse --short HEAD)"
+                            TAG_PR="pr-${CHANGE_ID}-${BUILD_NUMBER}-${SHORT_SHA}"
+
+                            docker tag "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${TAG_PR}"
+                            docker tag "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" "${DOCKER_NAMESPACE}/${IMAGE_NAME}:latest"
+
+                            echo "${DOCKERHUB_PSW}" | docker login "${DOCKER_REGISTRY}" -u "${DOCKERHUB_USR}" --password-stdin
+
+                            docker push "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${TAG_PR}"
+                            docker push "${DOCKER_NAMESPACE}/${IMAGE_NAME}:latest"
+
+                            echo "PUSHED: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${TAG_PR}"
+                            echo "TAG_PR=${TAG_PR}" > ci_tags.env
+                        '''
+                    }
+                }
             }
         }
-	}
+
+        stage('Trigger CD') {
+            when {
+                allOf {
+                    expression { return params.TRIGGER_CD.toBoolean() }
+                    expression { return params.CD_JOB?.trim() }
+                    changeRequest()
+                    equals expected: 'main', actual: "${env.CHANGE_TARGET}"
+                }
+            }
+            steps {
+                script {
+                    def tag = params.CD_DEPLOY_TAG?.trim()
+                    if (!tag) {
+                        def props = readFile('ci_tags.env').split('\n').find { it.startsWith('TAG_PR=') }
+                        tag = props?.replace('TAG_PR=', '')?.trim()
+                    }
+                    if (!tag) {
+                        error('Cannot resolve tag for CD (ci_tags.env missing TAG_PR?)')
+                    }
+
+                    build job: params.CD_JOB.trim(), wait: false, parameters: [
+                        string(name: 'IMAGE_NAME', value: params.IMAGE_NAME),
+                        string(name: 'DOCKER_NAMESPACE', value: params.DOCKER_NAMESPACE),
+                        string(name: 'DOCKER_REGISTRY', value: params.DOCKER_REGISTRY),
+                        string(name: 'IMAGE_TAG', value: tag),
+                        booleanParam(name: 'RUN_FUNCTIONAL_TESTS', value: true),
+                        booleanParam(name: 'KEEP_CONTAINER', value: false)
+                    ]
+                }
+            }
+        }
+    }
 
     post {
         always {
-            node('windows') {
-                bat 'chcp 65001 && docker logout'
+            script {
+                withEnv(["DOCKER_REGISTRY=${params.DOCKER_REGISTRY}"]) {
+                    sh '''
+                        docker logout "${DOCKER_REGISTRY}" || true
+                    '''
+                }
             }
         }
     }

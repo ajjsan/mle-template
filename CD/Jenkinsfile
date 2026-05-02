@@ -1,49 +1,144 @@
+/* Jenkins CD: pull образа, запуск контейнера, функциональные тесты.
+ *
+ * Запуск:
+ * - вручную (Parameterized Build)
+ * - по расписанию (настрой cron в свойствах job в Jenkins UI)
+ * - upstream из CI (stage Trigger CD в CI/Jenkinsfile)
+ *
+ * Credentials:
+ * - dockerhub (Username with password), credentialsId: dockerhub
+ *
+ * Если образ собран без модели, задайте HOST_MODEL_FILE (путь на агенте Jenkins),
+ * файл будет смонтирован в /app/experiments/tfidf_log_reg.pkl
+ */
+
 pipeline {
     agent any
 
-    environment {
-        DOCKERHUB_CREDS=credentials('mle-template')
-        LC_ALL = "en_US.UTF-8"
-        LANG    = "en_US.UTF-8"
-        LANGUAGE = "en_US.UTF-8"
+    options {
+        timestamps()
     }
 
-options {
-        timestamps()
-        skipDefaultCheckout(true)
-	}
-    stages {
+    parameters {
+        string(name: 'DOCKER_REGISTRY', defaultValue: 'docker.io', description: 'Реестр')
+        string(name: 'DOCKER_NAMESPACE', defaultValue: 'YOUR_DOCKERHUB_USER', description: 'Docker Hub namespace/user')
+        string(name: 'IMAGE_NAME', defaultValue: 'mle-template-api', description: 'Имя образа')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Тег образа')
 
-        stage('Login'){
-            steps{
-                //withCredentials([usernamePassword(credentialsId: 'mle-template', passwordVariable: 'DOCKER_REGISTRY_PWD', usernameVariable: 'DOCKER_REGISTRY_USER')]){
-                //bat 'chcp 65001 && echo %DOCKER_REGISTRY_PWD% | docker login -u %DOCKER_REGISTRY_USER% --password-stdin'}
-                //bat 'chcp 65001 && echo %DOCKERHUB_CREDS_PSW% | docker login -u %DOCKERHUB_CREDS_USR% --password-stdin'
-                bat 'docker login -u %DOCKERHUB_CREDS_USR% -p %DOCKERHUB_CREDS_PSW%'
+        string(name: 'HOST_PORT', defaultValue: '8000', description: 'Порт на хосте')
+        string(name: 'CONTAINER_NAME', defaultValue: 'mle-template-api-cd', description: 'Имя контейнера')
+
+        string(name: 'HOST_MODEL_FILE', defaultValue: '', description: 'Необязательно: путь к tfidf_log_reg.pkl на агенте для bind-mount')
+
+        booleanParam(name: 'RUN_FUNCTIONAL_TESTS', defaultValue: true, description: 'Запуск scripts/functional_test_api.py')
+        booleanParam(name: 'KEEP_CONTAINER', defaultValue: false, description: 'Если true — не удалять контейнер после прогона')
+    }
+
+    environment {
+        DOCKERHUB = credentials('dockerhub')
+    }
+
+    stages {
+        stage('Checkout (tests)') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Docker login + pull') {
+            steps {
+                script {
+                    withEnv([
+                        "DOCKER_REGISTRY=${params.DOCKER_REGISTRY}",
+                        "DOCKER_NAMESPACE=${params.DOCKER_NAMESPACE}",
+                        "IMAGE_NAME=${params.IMAGE_NAME}",
+                        "IMAGE_TAG=${params.IMAGE_TAG}",
+                    ]) {
+                        sh '''
+                            set -eux
+                            echo "${DOCKERHUB_PSW}" | docker login "${DOCKER_REGISTRY}" -u "${DOCKERHUB_USR}" --password-stdin
+                            docker pull "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+                        '''
+                    }
                 }
             }
+        }
 
-        stage('Pull image'){
-            steps{
-                bat '''
-                        docker pull altairzero/mle-template:latest
-                '''
+        stage('Stop old container') {
+            steps {
+                script {
+                    withEnv(["CONTAINER_NAME=${params.CONTAINER_NAME}"]) {
+                        sh 'docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true'
+                    }
+                }
             }
         }
 
-        stage('Run container'){
-            steps{
-                bat '''
-                        docker run --name mle-template -p 80:5556 -d altairzero/mle-template:latest
-                '''
+        stage('Run container') {
+            steps {
+                script {
+                    withEnv([
+                        "DOCKER_REGISTRY=${params.DOCKER_REGISTRY}",
+                        "DOCKER_NAMESPACE=${params.DOCKER_NAMESPACE}",
+                        "IMAGE_NAME=${params.IMAGE_NAME}",
+                        "IMAGE_TAG=${params.IMAGE_TAG}",
+                        "HOST_PORT=${params.HOST_PORT}",
+                        "CONTAINER_NAME=${params.CONTAINER_NAME}",
+                        "HOST_MODEL_FILE=${params.HOST_MODEL_FILE}",
+                    ]) {
+                        sh '''
+                            set -eux
+                            if [ -n "${HOST_MODEL_FILE}" ]; then
+                              test -f "${HOST_MODEL_FILE}"
+                              docker run -d \
+                                --name "${CONTAINER_NAME}" \
+                                -p "${HOST_PORT}:8000" \
+                                -v "${HOST_MODEL_FILE}:/app/experiments/tfidf_log_reg.pkl:ro" \
+                                "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+                            else
+                              docker run -d \
+                                --name "${CONTAINER_NAME}" \
+                                -p "${HOST_PORT}:8000" \
+                                "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+                            fi
+                        '''
+                    }
+                }
             }
         }
-	}
+
+        stage('Functional tests') {
+            when {
+                expression { return params.RUN_FUNCTIONAL_TESTS.toBoolean() }
+            }
+            steps {
+                script {
+                    withEnv(["HOST_PORT=${params.HOST_PORT}"]) {
+                        sh '''
+                            set -eux
+                            python scripts/functional_test_api.py --base-url "http://127.0.0.1:${HOST_PORT}" --timeout 180
+                        '''
+                    }
+                }
+            }
+        }
+    }
 
     post {
         always {
-            node('windows') {
-                bat 'docker stop mle-template && docker logout'
+            script {
+                if (!params.KEEP_CONTAINER.toBoolean()) {
+                    withEnv(["CONTAINER_NAME=${params.CONTAINER_NAME}"]) {
+                        sh '''
+                            docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+                        '''
+                    }
+                }
+                withEnv(["DOCKER_REGISTRY=${params.DOCKER_REGISTRY}"]) {
+                    sh '''
+                        docker logout "${DOCKER_REGISTRY}" || true
+                    '''
+                }
             }
         }
     }

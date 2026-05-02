@@ -76,3 +76,40 @@ docker run --rm -p 8000:8000 mle-template-api:latest
 ```
 
 И открой `http://127.0.0.1:8000/docs`.
+
+## Jenkins CI/CD
+
+В репозитории лежат пайплайны:
+
+- `CI/Jenkinsfile` — сборка образа и push в Docker Hub для PR в `main`
+- `CD/Jenkinsfile` — pull образа, запуск контейнера и функциональные проверки (`scripts/functional_test_api.py`)
+
+### Credentials
+
+Создайте credential типа **Username with password** для Docker Hub и укажите ID **`dockerhub`** (или поменяйте `credentials('dockerhub')` в Jenkinsfile).
+
+### CI (PR → main)
+
+Рекомендуется **Multibranch Pipeline** + webhook на события PR. Stage `Docker login + push` включится только когда:
+
+- сборка — это PR (`changeRequest()`)
+- target branch PR — `main` (`CHANGE_TARGET == main`)
+
+Параметры job позволяют задать `DOCKER_NAMESPACE` и `IMAGE_NAME`.
+
+Важно: stage `Verify model artifact` требует файл `experiments/tfidf_log_reg.pkl` в workspace до `docker build`.
+Если модель не хранится в git, добавьте отдельный шаг загрузки артефакта (S3/Nexus/архив) перед сборкой.
+
+Опционально: включите `TRIGGER_CD` и укажите `CD_JOB`, чтобы после успешного push автоматически стартовал CD job с нужным тегом.
+
+### CD (ручной запуск / расписание / после CI)
+
+Создайте отдельную Pipeline job, укажите `CD/Jenkinsfile`.
+
+Запуск:
+
+- вручную с параметрами (`IMAGE_TAG`, `HOST_PORT`, ...)
+- по расписанию: включите **Build periodically** / **Pipeline triggers** в настройках job (cron задаётся в UI Jenkins)
+- после CI: используйте stage `Trigger CD` из CI job или настройте **Parameterized Trigger Plugin**
+
+Если образ собран без модели внутри, передайте `HOST_MODEL_FILE` (путь на Jenkins агенте к `tfidf_log_reg.pkl`) — контейнер получит модель через bind-mount.
