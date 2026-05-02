@@ -1,16 +1,15 @@
 /* Jenkins CI: сборка Docker-образа и push в Docker Hub.
  *
+ * Совместимость: Jenkins agent может быть Windows или Linux.
+ *
  * Рекомендуемая настройка job:
  * - Multibranch Pipeline (GitHub/GitLab), default branch: main
- * - Webhook на PR events (opened/synchronize/reopened)
  *
  * Credentials:
  * - dockerhub (Username with password), credentialsId: dockerhub
  *
- * Важно: для корректного /health внутри образа нужен файл модели:
+ * Нужен файл модели в workspace до сборки:
  *   experiments/tfidf_log_reg.pkl
- * Если модель не в git — добавьте шаг загрузки артефакта до docker build,
- * либо используйте CD с bind-mount модели (см. CD/Jenkinsfile).
  */
 
 pipeline {
@@ -53,9 +52,21 @@ pipeline {
 
         stage('Verify model artifact (recommended)') {
             steps {
-                sh '''
-                    test -f experiments/tfidf_log_reg.pkl || (echo "ERROR: experiments/tfidf_log_reg.pkl not found in workspace. Add artifact fetch/train step before docker build." && exit 1)
-                '''
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            test -f experiments/tfidf_log_reg.pkl || (echo "ERROR: experiments/tfidf_log_reg.pkl not found in workspace." && exit 1)
+                        '''
+                    } else {
+                        bat '''
+                            @echo off
+                            if not exist experiments\\tfidf_log_reg.pkl (
+                              echo ERROR: experiments\\tfidf_log_reg.pkl not found in workspace.
+                              exit /b 1
+                            )
+                        '''
+                    }
+                }
             }
         }
 
@@ -65,11 +76,19 @@ pipeline {
                     withEnv([
                         "IMAGE_NAME=${params.IMAGE_NAME}",
                     ]) {
-                        sh '''
-                            set -eux
-                            SHORT_SHA="$(git rev-parse --short HEAD)"
-                            docker build -t "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" .
-                        '''
+                        if (isUnix()) {
+                            sh '''
+                                set -eux
+                                SHORT_SHA="$(git rev-parse --short HEAD)"
+                                docker build -t "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" .
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                for /f %%i in ('git rev-parse --short HEAD') do set SHORT_SHA=%%i
+                                docker build -t %IMAGE_NAME%:ci-%BUILD_NUMBER%-%SHORT_SHA% .
+                            '''
+                        }
                     }
                 }
             }
@@ -89,22 +108,39 @@ pipeline {
                         "DOCKER_NAMESPACE=${params.DOCKER_NAMESPACE}",
                         "IMAGE_NAME=${params.IMAGE_NAME}",
                     ]) {
-                        sh '''
-                            set -eux
-                            SHORT_SHA="$(git rev-parse --short HEAD)"
-                            TAG_PR="pr-${CHANGE_ID}-${BUILD_NUMBER}-${SHORT_SHA}"
+                        def shortSha = null
+                        if (isUnix()) {
+                            shortSha = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                        } else {
+                            shortSha = bat(script: '@echo off && git rev-parse --short HEAD', returnStdout: true).trim()
+                        }
 
-                            docker tag "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${TAG_PR}"
-                            docker tag "${IMAGE_NAME}:ci-${BUILD_NUMBER}-${SHORT_SHA}" "${DOCKER_NAMESPACE}/${IMAGE_NAME}:latest"
+                        def tagPr = "pr-${env.CHANGE_ID}-${env.BUILD_NUMBER}-${shortSha}"
+                        writeFile file: 'ci_tags.env', text: "TAG_PR=${tagPr}\n"
 
-                            echo "${DOCKERHUB_PSW}" | docker login "${DOCKER_REGISTRY}" -u "${DOCKERHUB_USR}" --password-stdin
+                        if (isUnix()) {
+                            sh """
+                                set -eux
+                                docker tag "\${IMAGE_NAME}:ci-\${BUILD_NUMBER}-${shortSha}" "\${DOCKER_NAMESPACE}/\${IMAGE_NAME}:${tagPr}"
+                                docker tag "\${IMAGE_NAME}:ci-\${BUILD_NUMBER}-${shortSha}" "\${DOCKER_NAMESPACE}/\${IMAGE_NAME}:latest"
 
-                            docker push "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${TAG_PR}"
-                            docker push "${DOCKER_NAMESPACE}/${IMAGE_NAME}:latest"
+                                echo "\${DOCKERHUB_PSW}" | docker login "${params.DOCKER_REGISTRY}" -u "${DOCKERHUB_USR}" --password-stdin
 
-                            echo "PUSHED: ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${IMAGE_NAME}:${TAG_PR}"
-                            echo "TAG_PR=${TAG_PR}" > ci_tags.env
-                        '''
+                                docker push "\${DOCKER_NAMESPACE}/\${IMAGE_NAME}:${tagPr}"
+                                docker push "\${DOCKER_NAMESPACE}/\${IMAGE_NAME}:latest"
+                            """
+                        } else {
+                            bat """
+                                @echo off
+                                docker tag %IMAGE_NAME%:ci-%BUILD_NUMBER%-${shortSha} %DOCKER_NAMESPACE%/%IMAGE_NAME%:${tagPr}
+                                docker tag %IMAGE_NAME%:ci-%BUILD_NUMBER%-${shortSha} %DOCKER_NAMESPACE%/%IMAGE_NAME%:latest
+
+                                echo %DOCKERHUB_PSW%| docker login ${params.DOCKER_REGISTRY} -u %DOCKERHUB_USR% --password-stdin
+
+                                docker push %DOCKER_NAMESPACE%/%IMAGE_NAME%:${tagPr}
+                                docker push %DOCKER_NAMESPACE%/%IMAGE_NAME%:latest
+                            """
+                        }
                     }
                 }
             }
@@ -147,9 +183,17 @@ pipeline {
         always {
             script {
                 withEnv(["DOCKER_REGISTRY=${params.DOCKER_REGISTRY}"]) {
-                    sh '''
-                        docker logout "${DOCKER_REGISTRY}" || true
-                    '''
+                    if (isUnix()) {
+                        sh '''
+                            docker logout "${DOCKER_REGISTRY}" || true
+                        '''
+                    } else {
+                        bat '''
+                            @echo off
+                            docker logout %DOCKER_REGISTRY%
+                            exit /b 0
+                        '''
+                    }
                 }
             }
         }

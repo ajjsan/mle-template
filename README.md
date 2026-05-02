@@ -84,6 +84,8 @@ docker run --rm -p 8000:8000 mle-template-api:latest
 - `CI/Jenkinsfile` — сборка образа и push в Docker Hub для PR в `main`
 - `CD/Jenkinsfile` — pull образа, запуск контейнера и функциональные проверки (`scripts/functional_test_api.py`)
 
+Оба пайплайна рассчитаны на Jenkins agent **Linux или Windows**: на Windows используются шаги `bat`, на Linux — `sh`.
+
 ### Credentials
 
 Создайте credential типа **Username with password** для Docker Hub и укажите ID **`dockerhub`** (или поменяйте `credentials('dockerhub')` в Jenkinsfile).

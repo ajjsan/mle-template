@@ -1,9 +1,7 @@
 /* Jenkins CD: pull образа, запуск контейнера, функциональные тесты.
  *
- * Запуск:
- * - вручную (Parameterized Build)
- * - по расписанию (настрой cron в свойствах job в Jenkins UI)
- * - upstream из CI (stage Trigger CD в CI/Jenkinsfile)
+ * Совместимость: Jenkins agent может быть Windows или Linux.
+ * На Windows используется `bat`, на Linux — `sh`.
  *
  * Credentials:
  * - dockerhub (Username with password), credentialsId: dockerhub
@@ -54,11 +52,19 @@ pipeline {
                         "IMAGE_NAME=${params.IMAGE_NAME}",
                         "IMAGE_TAG=${params.IMAGE_TAG}",
                     ]) {
-                        sh '''
-                            set -eux
-                            echo "${DOCKERHUB_PSW}" | docker login "${DOCKER_REGISTRY}" -u "${DOCKERHUB_USR}" --password-stdin
-                            docker pull "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
-                        '''
+                        if (isUnix()) {
+                            sh '''
+                                set -eux
+                                echo "${DOCKERHUB_PSW}" | docker login "${DOCKER_REGISTRY}" -u "${DOCKERHUB_USR}" --password-stdin
+                                docker pull "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                echo %DOCKERHUB_PSW%| docker login %DOCKER_REGISTRY% -u %DOCKERHUB_USR% --password-stdin
+                                docker pull %DOCKER_NAMESPACE%/%IMAGE_NAME%:%IMAGE_TAG%
+                            '''
+                        }
                     }
                 }
             }
@@ -68,7 +74,17 @@ pipeline {
             steps {
                 script {
                     withEnv(["CONTAINER_NAME=${params.CONTAINER_NAME}"]) {
-                        sh 'docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true'
+                        if (isUnix()) {
+                            sh '''
+                                docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                docker rm -f %CONTAINER_NAME% >nul 2>&1
+                                exit /b 0
+                            '''
+                        }
                     }
                 }
             }
@@ -86,22 +102,34 @@ pipeline {
                         "CONTAINER_NAME=${params.CONTAINER_NAME}",
                         "HOST_MODEL_FILE=${params.HOST_MODEL_FILE}",
                     ]) {
-                        sh '''
-                            set -eux
-                            if [ -n "${HOST_MODEL_FILE}" ]; then
-                              test -f "${HOST_MODEL_FILE}"
-                              docker run -d \
-                                --name "${CONTAINER_NAME}" \
-                                -p "${HOST_PORT}:8000" \
-                                -v "${HOST_MODEL_FILE}:/app/experiments/tfidf_log_reg.pkl:ro" \
-                                "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
-                            else
-                              docker run -d \
-                                --name "${CONTAINER_NAME}" \
-                                -p "${HOST_PORT}:8000" \
-                                "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
-                            fi
-                        '''
+                        if (isUnix()) {
+                            sh '''
+                                set -eux
+                                if [ -n "${HOST_MODEL_FILE}" ]; then
+                                  test -f "${HOST_MODEL_FILE}"
+                                  docker run -d \
+                                    --name "${CONTAINER_NAME}" \
+                                    -p "${HOST_PORT}:8000" \
+                                    -v "${HOST_MODEL_FILE}:/app/experiments/tfidf_log_reg.pkl:ro" \
+                                    "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+                                else
+                                  docker run -d \
+                                    --name "${CONTAINER_NAME}" \
+                                    -p "${HOST_PORT}:8000" \
+                                    "${DOCKER_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+                                fi
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                if not "%HOST_MODEL_FILE%"=="" (
+                                  if not exist "%HOST_MODEL_FILE%" exit /b 1
+                                  docker run -d --name %CONTAINER_NAME% -p %HOST_PORT%:8000 -v "%HOST_MODEL_FILE%:/app/experiments/tfidf_log_reg.pkl:ro" %DOCKER_NAMESPACE%/%IMAGE_NAME%:%IMAGE_TAG%
+                                ) else (
+                                  docker run -d --name %CONTAINER_NAME% -p %HOST_PORT%:8000 %DOCKER_NAMESPACE%/%IMAGE_NAME%:%IMAGE_TAG%
+                                )
+                            '''
+                        }
                     }
                 }
             }
@@ -114,10 +142,17 @@ pipeline {
             steps {
                 script {
                     withEnv(["HOST_PORT=${params.HOST_PORT}"]) {
-                        sh '''
-                            set -eux
-                            python scripts/functional_test_api.py --base-url "http://127.0.0.1:${HOST_PORT}" --timeout 180
-                        '''
+                        if (isUnix()) {
+                            sh '''
+                                set -eux
+                                python scripts/functional_test_api.py --base-url "http://127.0.0.1:${HOST_PORT}" --timeout 180
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                python scripts/functional_test_api.py --base-url http://127.0.0.1:%HOST_PORT% --timeout 180
+                            '''
+                        }
                     }
                 }
             }
@@ -129,15 +164,31 @@ pipeline {
             script {
                 if (!params.KEEP_CONTAINER.toBoolean()) {
                     withEnv(["CONTAINER_NAME=${params.CONTAINER_NAME}"]) {
-                        sh '''
-                            docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
-                        '''
+                        if (isUnix()) {
+                            sh '''
+                                docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                docker rm -f %CONTAINER_NAME% >nul 2>&1
+                                exit /b 0
+                            '''
+                        }
                     }
                 }
                 withEnv(["DOCKER_REGISTRY=${params.DOCKER_REGISTRY}"]) {
-                    sh '''
-                        docker logout "${DOCKER_REGISTRY}" || true
-                    '''
+                    if (isUnix()) {
+                        sh '''
+                            docker logout "${DOCKER_REGISTRY}" || true
+                        '''
+                    } else {
+                        bat '''
+                            @echo off
+                            docker logout %DOCKER_REGISTRY%
+                            exit /b 0
+                        '''
+                    }
                 }
             }
         }
