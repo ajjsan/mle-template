@@ -24,8 +24,11 @@ class TestDataMaker(unittest.TestCase):
         self.assertEqual(self.data_maker.split_data(), True)
 
     def test_save_splitted_data(self):
-        self.assertEqual(self.data_maker.save_splitted_data(pd.read_csv(
-            config["DATA"]["x_data"], index_col=0), config["DATA"]["x_data"]), True)
+        # Для нового проекта сохранение делается внутри split_data,
+        # тут просто проверяем, что файлы реально создаются.
+        self.data_maker.split_data()
+        self.assertTrue(os.path.isfile(os.path.join(os.getcwd(), "data", "train_split.csv")))
+        self.assertTrue(os.path.isfile(os.path.join(os.getcwd(), "data", "val_split.csv")))
 
 
 if __name__ == "__main__":
