@@ -5,16 +5,16 @@ stages:
     deps:
     - path: config.ini
       hash: md5
-      md5: 7f30d0f5d6b068b444f045e6639ca254
-      size: 472
+      md5: 340fc7b02d1ac67a7ebdb4219f4785d0
+      size: 2091
     - path: data/train.csv
       hash: md5
       md5: 7b48b0cc7e5d55d1bf49eb8d4582830c
       size: 8664015
     - path: src/preprocess.py
       hash: md5
-      md5: 65c080fb7da8673715123a13321fd0ad
-      size: 3808
+      md5: 15b6e52b589b7978494983deedf9d98c
+      size: 3984
     outs:
     - path: data/train_split.csv
       hash: md5

@@ -19,6 +19,7 @@ stages:
       - data/val_split.csv
     outs:
       - experiments/tfidf_log_reg.pkl
+          cache: false
     metrics:
       - experiments/metrics.json:
           cache: false

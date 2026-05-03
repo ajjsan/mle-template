@@ -1,10 +1,26 @@
 # DevOps
 ## Лабораторная работа №1 
 - Выполнил: Хабибуллин Айсан
+- Вариант 9
 
 ## Ссылки
 - github: https://github.com/ajjsan/mle-template
 - dockerhub: https://hub.docker.com/repository/docker/ajjsan/mle-template-api
+
+
+## Отчет
+В рамках лабораторнйо работы:
+1. Создан форк репотзитория. Поддержаивалась история коммитов
+2. Подготовлены данные согласно варианту с сайта Keggle. Задачи классификации текстов.
+3. Разработана модель с испольхованием TF-IDF + LogisticRegression.
+4.  Настроены файлы py.
+5. Созданы тесты.
+6. Настроен DVC пайплайн. Без внешнего хранилища.
+7. Настроены dockerfile и docker-compose.
+8. Реализованы основные файлы: config.ini, requirements.txt, Dockerfile, docker-compose.yml
+9. Создан CI pipeline в Jenkins, который раз в 2 часа проверяет обновление к репозитории.
+10. Создан CD pipeline в Jenkins, которые запускается после CI или вручную.
+
 
 ## Детали реализации
 ### DVC
@@ -12,10 +28,14 @@
 Проект настроен как DVC pipeline:
 
 - `preprocess` -> создаёт `data/train_split.csv` и `data/val_split.csv`
-- `train` -> обучает `TF-IDF + LogisticRegression`, сохраняет модель и метрику
+- `train` -> обучает `TF-IDF + LogisticRegression`, сохраняет модель и метрику 
 - `predict` -> генерирует `experiments/submission.csv`
 
 Пути, split и гиперпараметры модели лежат в `config.ini`.
+
+```powershell
+python dvc repro
+```
 
 ### FastAPI
 
